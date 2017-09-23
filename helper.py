@@ -112,6 +112,7 @@ def gen_test_output(sess, logits, keep_prob, image_pl, data_folder, image_shape)
     for image_file in glob(os.path.join(data_folder, 'image_2', '*.png')):
         image = scipy.misc.imresize(scipy.misc.imread(image_file), image_shape)
 
+        # For inference, keep probability is set to 1.0 (no dropout)
         im_softmax = sess.run(
             [tf.nn.softmax(logits)],
             {keep_prob: 1.0, image_pl: [image]})
@@ -125,7 +126,8 @@ def gen_test_output(sess, logits, keep_prob, image_pl, data_folder, image_shape)
         yield os.path.basename(image_file), np.array(street_im)
 
 
-def save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image):
+def save_inference_samples(
+    runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image):
     # Make folder for current run
     output_dir = os.path.join(runs_dir, str(time.time()))
     if os.path.exists(output_dir):
@@ -133,7 +135,7 @@ def save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_p
     os.makedirs(output_dir)
 
     # Run NN on test images and save them to HD
-    print('Training Finished. Saving test images to: {}'.format(output_dir))
+    print('\nTraining Finished. Saving test images to: {}'.format(output_dir))
     image_outputs = gen_test_output(
         sess, logits, keep_prob, input_image, os.path.join(data_dir, 'data_road/testing'), image_shape)
     for name, image in image_outputs:
