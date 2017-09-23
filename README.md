@@ -31,3 +31,10 @@ python main.py
  - `main.py`
  - `project_tests.py`
  - Newest inference images from `runs` folder
+
+### Implementation notes
+I have implemented two FCN architectures:
+ 1. The FCN-8s architecture described in "Long et al. 2016: Fully Convolutional Networks for Semantic Segmentation". This results in a model with 134 million trainable parameters.
+ 2. An alternative architecture in which the decoder reduces the depth step-wise from 4096 (depth of VGG-7), to 512, 256 and finally 2 (the number of classes). This way, no 1x1 convolutions are required and layers 3 and 4 of VGG can be summed directly to the decoder layers, because all dimensions (height, width, depth) are identical in the encoder (VGG) and the decoder. This architecture results in a modest increase of trainable parameters to 170 million, but training is faster and inference results ostensibly better.
+Both architectures are given in `main.py`, see functions `layers()` and `layers_alt()`, respectively.
+For the project training (function `run()`), I therefore choose the alternative architecture, and all test images in `runs.zip` are the result of performing inference in the alternative model.
