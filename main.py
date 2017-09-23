@@ -4,22 +4,23 @@ import helper
 import warnings
 from distutils.version import LooseVersion
 import project_tests as tests
+import numpy as np
 
 
 # Hyper-parameters ----------
 
-EPOCHS = 6
+EPOCHS = 5
 BATCH_SIZE = 10
 
 LEARNING_RATE = 0.0001
 KEEP_PROB = 0.6
 
-NUM_CLASSES = 2
+NUM_CLASSES  = 2  # road and no-road
 NUM_FEATURES = 3  # RGB
 
 
 
-print('\nTEST CONFIGURATION ===============================\n')
+print('\nTEST CONFIGURATION ===================================================\n')
 
 # Check TensorFlow Version
 assert LooseVersion(tf.__version__) >= LooseVersion('1.0'), 'Please use TensorFlow version 1.0 or newer.  You are using {}'.format(tf.__version__)
@@ -61,11 +62,85 @@ def load_vgg(sess, vgg_path):
 
     return image_input, keep_prob, layer3_out, layer4_out, layer7_out
 
-print('\nTEST LOADS_VGG ===============================\n')
+print('\nTEST LOADS_VGG ========================================================\n')
 tests.test_load_vgg(load_vgg, tf)
 
 
-def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
+
+def layers(
+    vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes, alt_architecture =False):
+    """
+    Create the layers for a fully convolutional network.  Build skip-layers using the vgg layers.
+    This is the FCN-8s architecture described in:
+    "Long et al. 2016: Fully Convolutional Networks for Semantic Segmentation"
+    Set alt_architecture:
+      - to false to use the FCN-8s architecture
+      - to true to use an alternative FCN architecture without 1x1 convolutions
+    :param vgg_layer7_out: TF Tensor for VGG Layer 3 output
+    :param vgg_layer4_out: TF Tensor for VGG Layer 4 output
+    :param vgg_layer3_out: TF Tensor for VGG Layer 7 output
+    :param num_classes: Number of classes to classify
+    :return: The Tensor for the last layer of output
+    """
+    # TODO: Implement function
+
+    if alt_architecture:
+        return layers_alt(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes)
+
+    regularizer_scale = 1e-3
+
+    # apply 1x1 conv layer to vgg_layer7_out, vgg_layer4_out and vgg_layer3_out VGG layers
+    # (to reduce number of channels to number of classes)
+    vgg_layer7_out_conv1x1 = tf.layers.conv2d(
+        vgg_layer7_out, num_classes, 1, strides=(1,1), padding='same',
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
+
+    vgg_layer4_out_conv1x1 = tf.layers.conv2d(
+        vgg_layer4_out, num_classes, 1, strides=(1,1), padding='same',
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
+
+    vgg_layer3_out_conv1x1 = tf.layers.conv2d(
+        vgg_layer3_out, num_classes, 1, strides=(1,1), padding='same',
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
+
+
+    # apply conv transpose layer (2x up-sample)
+    x = tf.layers.conv2d_transpose(
+        vgg_layer7_out_conv1x1, num_classes, 4, strides=(2,2), padding='same',
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
+
+    # skip connection with vgg_layer4_out_conv1x1
+    x = tf.add(x, vgg_layer4_out_conv1x1)
+
+
+    # apply conv transpose layer (2x up-sample)
+    x = tf.layers.conv2d_transpose(
+        x, num_classes, 4, strides=(2,2), padding='same',
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
+
+    # skip connection with vgg_layer3_out_conv1x1
+    x = tf.add(x, vgg_layer3_out_conv1x1)
+
+
+    # apply conv transpose layer (8x up-sample)
+    x = tf.layers.conv2d_transpose(
+        x, num_classes, 16, strides=(8,8), padding='same',
+        kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
+
+    # report number of architecture trainable variables
+    print('\nNumber of model parameters:')
+    print( np.sum(
+        [np.prod(v.get_shape().as_list()) for v in tf.trainable_variables()]) )
+
+    return x
+
+print('\nTEST LAYERS ==========================================================\n')
+tests.test_layers(layers)
+
+
+# This is an alternative architecture without 1x1 convolutions,
+# with direct skip connections
+def layers_alt(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     """
     Create the layers for a fully convolutional network.  Build skip-layers using the vgg layers.
     :param vgg_layer7_out: TF Tensor for VGG Layer 3 output
@@ -76,15 +151,14 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     """
     # TODO: Implement function
 
-    # 1x1 conv layer
-    x = tf.layers.conv2d(
-        vgg_layer7_out, num_classes, 1, strides=(1,1), padding='same',
-        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = vgg_layer7_out
+    #x = tf.Print(x, ['shape of vgg_layer7_out: ', tf.shape(x)[1:]] )
 
     # conv transpose layer (2x up-sample)
     x = tf.layers.conv2d_transpose(
         x, 512, 4, strides=(2,2), padding='same',
         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    #x = tf.Print(x, ['shape after conv transpose 2x: ', tf.shape(x)[1:]] )
 
     # skip connection
     x = tf.add(x, vgg_layer4_out)
@@ -93,6 +167,7 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     x = tf.layers.conv2d_transpose(
         x, 256, 4, strides=(2,2), padding='same',
         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    #x = tf.Print(x, ['shape after conv transpose 2x: ', tf.shape(x)[1:]] )
 
     # skip connection
     x = tf.add(x, vgg_layer3_out)
@@ -101,11 +176,17 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     x = tf.layers.conv2d_transpose(
         x, num_classes, 16, strides=(8,8), padding='same',
         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    #x = tf.Print(x, ['shape after conv transpose 8x: ', tf.shape(x)[1:]] )
+
+    # report number of architecture trainable variables
+    print('\nNumber of model parameters:')
+    print( np.sum(
+        [np.prod(v.get_shape().as_list()) for v in tf.trainable_variables()]) )
 
     return x
 
-print('\nTEST LAYERS ===============================\n')
-tests.test_layers(layers)
+#print('\nTEST LAYERS (ALTERNATIVE ARCHITECTURE) ===============================\n')
+#tests.test_layers(layers_alt)
 
 
 def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
@@ -133,7 +214,7 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
 
     return logits, train_op, cross_entropy_loss
 
-print('\nTEST OPTIMIZE ===============================\n')
+print('\nTEST OPTIMIZE =========================================================\n')
 tests.test_optimize(optimize)
 
 
@@ -158,7 +239,7 @@ def train_nn(
 
     print('Training neural network')
 
-    # initialize  variables
+    # initialize variables
     sess.run( tf.global_variables_initializer() )
 
     # go over epochs ----------
@@ -182,7 +263,7 @@ def train_nn(
 
             print('Loss: {}'.format(loss))
 
-print('\nTEST TRAIN_NN ===============================\n')
+print('\nTEST TRAIN_NN =========================================================\n')
 tests.test_train_nn(train_nn)
 
 
@@ -192,11 +273,11 @@ def run():
     data_dir = './data'
     runs_dir = './runs'
 
-    print('\nTEST KITTI DATASET ===============================\n')
+    print('\nTEST KITTI DATASET ================================================\n')
     tests.test_for_kitti_dataset(data_dir)
 
 
-    print('\nRUNNING MAIN ===============================\n')
+    print('\nRUNNING MAIN ======================================================\n')
 
     # Download pretrained vgg model
     helper.maybe_download_pretrained_vgg(data_dir)
@@ -221,6 +302,7 @@ def run():
         learning_rate = tf.placeholder(tf.float32)
         correct_label = tf.placeholder(tf.float32, shape=(None, None, None, NUM_CLASSES))
 
+
         # OPTIONAL: Augment Images for better results
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
 
@@ -228,8 +310,11 @@ def run():
         input_image, keep_prob, vgg_layer3_out, vgg_layer4_out, vgg_layer7_out = load_vgg(
             sess, vgg_path)
 
+        # use model architecture alternative to fcn-8s
+        alt_architecture = True
+
         nn_last_layer = layers(
-            vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, NUM_CLASSES)
+            vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, NUM_CLASSES, alt_architecture)
 
         logits, train_op, cross_entropy_loss = optimize(
             nn_last_layer, correct_label, learning_rate, NUM_CLASSES)
@@ -240,7 +325,7 @@ def run():
             input_image, correct_label, keep_prob, learning_rate)
 
         # TODO: Save inference data using helper.save_inference_samples
-        # helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
+        #  helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
         helper.save_inference_samples(
             runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
 
