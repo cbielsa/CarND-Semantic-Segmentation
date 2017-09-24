@@ -9,11 +9,11 @@ import numpy as np
 
 # Hyper-parameters ----------
 
-EPOCHS = 5
-BATCH_SIZE = 10
+EPOCHS = 20
+BATCH_SIZE = 5
 
-LEARNING_RATE = 0.0001
-KEEP_PROB = 0.6
+LEARNING_RATE = 2e-5
+KEEP_PROB = 0.7
 
 NUM_CLASSES  = 2  # road and no-road
 NUM_FEATURES = 3  # RGB
@@ -93,20 +93,24 @@ def layers(
     # (to reduce number of channels to number of classes)
     vgg_layer7_out_conv1x1 = tf.layers.conv2d(
         vgg_layer7_out, num_classes, 1, strides=(1,1), padding='same',
+        kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
         kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
 
     vgg_layer4_out_conv1x1 = tf.layers.conv2d(
         vgg_layer4_out, num_classes, 1, strides=(1,1), padding='same',
+        kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
         kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
 
     vgg_layer3_out_conv1x1 = tf.layers.conv2d(
         vgg_layer3_out, num_classes, 1, strides=(1,1), padding='same',
+        kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
         kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
 
 
     # apply conv transpose layer (2x up-sample)
     x = tf.layers.conv2d_transpose(
         vgg_layer7_out_conv1x1, num_classes, 4, strides=(2,2), padding='same',
+        kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
         kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
 
     # skip connection with vgg_layer4_out_conv1x1
@@ -116,6 +120,7 @@ def layers(
     # apply conv transpose layer (2x up-sample)
     x = tf.layers.conv2d_transpose(
         x, num_classes, 4, strides=(2,2), padding='same',
+        kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
         kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
 
     # skip connection with vgg_layer3_out_conv1x1
@@ -125,6 +130,7 @@ def layers(
     # apply conv transpose layer (8x up-sample)
     x = tf.layers.conv2d_transpose(
         x, num_classes, 16, strides=(8,8), padding='same',
+        kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
         kernel_regularizer=tf.contrib.layers.l2_regularizer(regularizer_scale))
 
     # report number of architecture trainable variables
@@ -157,6 +163,8 @@ def layers_alt(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     # conv transpose layer (2x up-sample)
     x = tf.layers.conv2d_transpose(
         x, 512, 4, strides=(2,2), padding='same',
+        kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+        #kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     #x = tf.Print(x, ['shape after conv transpose 2x: ', tf.shape(x)[1:]] )
 
@@ -166,6 +174,8 @@ def layers_alt(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     # conv transpose layer (2x up-sample)
     x = tf.layers.conv2d_transpose(
         x, 256, 4, strides=(2,2), padding='same',
+        kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+        #kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     #x = tf.Print(x, ['shape after conv transpose 2x: ', tf.shape(x)[1:]] )
 
@@ -175,6 +185,8 @@ def layers_alt(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     # conv transpose layer (8x up-sample)
     x = tf.layers.conv2d_transpose(
         x, num_classes, 16, strides=(8,8), padding='same',
+        kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+        #kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     #x = tf.Print(x, ['shape after conv transpose 8x: ', tf.shape(x)[1:]] )
 
